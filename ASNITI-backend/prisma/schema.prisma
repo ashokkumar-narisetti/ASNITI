@@ -1,0 +1,155 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum Role {
+  SUPER_ADMIN
+  SCHOOL_ADMIN
+  TEACHER
+  PARENT
+}
+
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+}
+
+enum SchoolStatus {
+  ACTIVE
+  SUSPENDED
+  DELETED
+}
+
+model School {
+  id        String       @id @default(uuid())
+  name      String       
+  address   String?
+  isActive  Boolean      @default(true)
+  status    SchoolStatus @default(ACTIVE)
+  createdAt DateTime     @default(now())
+
+  users    User[]
+  students Student[]
+  classes  Class[]
+}
+
+model User {
+  id                 String   @id @default(uuid())
+  username           String   @unique
+  passwordHash       String
+  role               Role
+  active             Boolean  @default(true)
+  mustChangePassword Boolean  @default(false)
+  schoolId           String?
+  createdAt          DateTime @default(now())
+
+  school School? @relation(fields: [schoolId], references: [id])
+
+  // ✅ Parent → Students (MATCHING NAME)
+  students Student[] @relation("ParentStudents")
+
+  // ✅ Audit logs
+  auditLogs AuditLog[] @relation("UserAuditLogs")
+  classes   Class[]
+}
+
+model Class {
+  id        String    @id @default(uuid())
+  schoolId  String
+  name      String
+  teacherId String?
+  school    School    @relation(fields: [schoolId], references: [id])
+  teacher   User?     @relation(fields: [teacherId], references: [id])
+  students  Student[]
+  createdAt DateTime  @default(now())
+}
+
+model Student {
+  id           String @id @default(uuid())
+  fullName     String
+  classId      String
+  parentUserId String
+
+  class Class @relation(fields: [classId], references: [id])
+
+  // ✅ Student → Parent (MATCHING NAME)
+  parent User @relation("ParentStudents", fields: [parentUserId], references: [id])
+
+  attendance Attendance[]
+  school     School?      @relation(fields: [schoolId], references: [id])
+  schoolId   String?
+  marks      Mark[]
+}
+model Teacher {
+  id        String   @id @default(uuid())
+  name      String
+  username  String   @unique
+  mobile    String
+  password  String
+  className String?
+  status    TeacherStatus @default(ACTIVE)
+  createdAt DateTime @default(now())
+}
+
+enum TeacherStatus {
+  ACTIVE
+  INACTIVE
+}
+
+model Attendance {
+  id        String           @id @default(uuid())
+  schoolId  String
+  studentId String
+  date      DateTime
+  status    AttendanceStatus
+
+  student Student @relation(fields: [studentId], references: [id])
+}
+
+model Homework {
+  id        String   @id @default(uuid())
+  schoolId  String
+  classId   String
+  subject   String
+  content   String
+  createdAt DateTime @default(now())
+}
+
+model Mark {
+  id        String @id @default(uuid())
+  schoolId  String
+  studentId String
+  subject   String
+  examName  String
+  score     Int
+
+  student Student @relation(fields: [studentId], references: [id])
+}
+
+enum AuditAction {
+  SCHOOL_ENABLED
+  SCHOOL_DISABLED
+  USER_ENABLED
+  USER_DISABLED
+}
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  action    String
+  actorId   String
+  createdAt DateTime @default(now())
+
+  actor User @relation("UserAuditLogs", fields: [actorId], references: [id])
+}
